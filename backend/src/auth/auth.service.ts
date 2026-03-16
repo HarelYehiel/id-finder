@@ -1,18 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import axios from 'axios';
-import * as XLSX from 'xlsx';
 import { USERS } from './data/users.data';
 import { LoginDto } from './dto/login.dto';
 import { ParseTextDto } from './dto/parse-text.dto';
 import { GoogleSheetsService } from './google-sheets.service';
-
-type ExcelRow = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-};
 
 type ParsedLineResult = {
   originalLine: string;
@@ -32,9 +23,6 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly googleSheetsService: GoogleSheetsService,
   ) {}
-
-  private readonly excelUrl =
-    'https://docs.google.com/spreadsheets/d/1C0CXS6TSci-V19pCjRFbW5n5BYjJnS8YOTVRkr5Ym8Y/export?format=xlsx';
 
   login(loginDto: LoginDto) {
     const user = USERS.find(
@@ -63,8 +51,7 @@ export class AuthService {
   }
 
   async parseTextAndSearchExcel(parseTextDto: ParseTextDto) {
-    const workbook = await this.downloadWorkbookFromInternet(this.excelUrl);
-    const excelRows = this.extractRowsFromWorkbook(workbook);
+    const excelRows = await this.googleSheetsService.readSourceRows();
 
     const inputLines = parseTextDto.text
       .split('\n')
@@ -77,7 +64,6 @@ export class AuthService {
       const match = line.match(/\d{7,}/);
       const extractedNumber = match ? match[0] : null;
 
-      // שורות בלי מספר - מדלגים עליהן לגמרי
       if (!extractedNumber) {
         continue;
       }
@@ -115,7 +101,6 @@ export class AuthService {
       results.push(successResult);
     }
 
-    // אם לא נמצאו בכלל מספרים תקינים - לא יוצרים בלוק חדש בגיליון
     if (results.length === 0) {
       return {
         message: 'לא נמצאו מספרים תקינים בטקסט',
@@ -143,49 +128,5 @@ export class AuthService {
       totalLines: inputLines.length,
       results,
     };
-  }
-
-  private async downloadWorkbookFromInternet(
-    url: string,
-  ): Promise<XLSX.WorkBook> {
-    const response = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-    });
-
-    const data = new Uint8Array(response.data);
-    return XLSX.read(data, { type: 'array' });
-  }
-
-  private fixHebrew(value: unknown): string {
-    if (value === null || value === undefined) {
-      return '';
-    }
-
-    const text = String(value).trim();
-
-    if (text.includes('×')) {
-      return Buffer.from(text, 'latin1').toString('utf8').trim();
-    }
-
-    return text;
-  }
-
-  private extractRowsFromWorkbook(workbook: XLSX.WorkBook): ExcelRow[] {
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-
-    const rows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, {
-      header: 1,
-      defval: '',
-    });
-
-    const dataRows = rows.slice(1);
-
-    return dataRows.map((row) => ({
-      id: String(row[0] ?? '').trim().replace('.0', '').replace(/\s/g, ''),
-      firstName: this.fixHebrew(row[1]),
-      lastName: this.fixHebrew(row[2]),
-      role: this.fixHebrew(row[6]),
-    }));
   }
 }

@@ -28,27 +28,61 @@ class _LoginPageState extends State<LoginPage> {
       loading = true;
     });
 
-    final token = await ApiService.login(
-      codeController.text.trim(),
-      idController.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      loading = false;
-    });
-
-    if (token != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomePage(token: token),
-        ),
+    try {
+      final token = await ApiService.login(
+        codeController.text.trim(),
+        idController.text.trim(),
       );
-    } else {
+
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+
+      if (token != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HomePage(token: token),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("ההתחברות נכשלה")),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+
+      if (e.toString().contains("APP_UPDATE_REQUIRED")) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text("נדרש עדכון"),
+            content: const Text(
+              "הגרסה הזו כבר לא נתמכת. יש לעדכן את האפליקציה כדי להמשיך.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text("אישור"),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ההתחברות נכשלה")),
+        SnackBar(content: Text("שגיאה: $e")),
       );
     }
   }

@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
 export class GoogleSheetsService {
   private readonly spreadsheetId = '1C0CXS6TSci-V19pCjRFbW5n5BYjJnS8YOTVRkr5Ym8Y';
   private readonly outputSheetName = 'Output';
-
+  private readonly sourceSheetName = 'Data';
   private readonly writeMutex = new Mutex();
 
   constructor(private configService: ConfigService) { }
@@ -88,6 +88,51 @@ export class GoogleSheetsService {
     });
 
     return `דוח נוצר בתאריך ${israelDateTime}`;
+  }
+
+  private fixHebrew(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    const text = String(value).trim();
+
+    if (text.includes('×')) {
+      return Buffer.from(text, 'latin1').toString('utf8').trim();
+    }
+
+    return text;
+  }
+
+  async readSourceRows(): Promise<
+    Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      role: string;
+    }>
+  > {
+    const sheets = await this.getSheetsClient();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: `${this.sourceSheetName}!A:G`,
+    });
+
+    const values = response.data.values ?? [];
+
+    if (values.length <= 1) {
+      return [];
+    }
+
+    const dataRows = values.slice(1);
+
+    return dataRows.map((row) => ({
+      id: String(row[0] ?? '').trim().replace('.0', '').replace(/\s/g, ''),
+      firstName: this.fixHebrew(row[1] ?? ''),
+      lastName: this.fixHebrew(row[2] ?? ''),
+      role: this.fixHebrew(row[6] ?? ''),
+    }));
   }
 
   async writeResults(
