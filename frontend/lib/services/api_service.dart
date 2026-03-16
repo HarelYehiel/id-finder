@@ -7,8 +7,8 @@ class ApiService {
   static const String prodUrl =
       "https://id-finder-backend-1027747272782.europe-west1.run.app";
 
-  static const String baseUrl = prodUrl;
-  
+  static const String baseUrl = localUrl;
+
   static Future<String> _getBuildNumber() async {
     final packageInfo = await PackageInfo.fromPlatform();
     return packageInfo.buildNumber;
@@ -25,10 +25,7 @@ class ApiService {
               "Content-Type": "application/json",
               "X-App-Build": buildNumber,
             },
-            body: jsonEncode({
-              "code": code,
-              "identityNumber": identityNumber,
-            }),
+            body: jsonEncode({"code": code, "identityNumber": identityNumber}),
           )
           .timeout(const Duration(seconds: 15));
 
@@ -51,7 +48,12 @@ class ApiService {
     }
   }
 
-  static Future<bool> sendText(String token, String text) async {
+  static Future<bool> sendText({
+    required String token,
+    required String text,
+    required String searchMode,
+    String? pluga,
+  }) async {
     try {
       final buildNumber = await _getBuildNumber();
 
@@ -63,7 +65,11 @@ class ApiService {
               "Authorization": "Bearer $token",
               "X-App-Build": buildNumber,
             },
-            body: jsonEncode({"text": text}),
+            body: jsonEncode({
+              "text": text,
+              "searchMode": searchMode,
+              "pluga": pluga,
+            }),
           )
           .timeout(const Duration(seconds: 15));
 

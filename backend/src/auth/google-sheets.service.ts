@@ -10,7 +10,7 @@ export class GoogleSheetsService {
   private readonly sourceSheetName = 'Data';
   private readonly writeMutex = new Mutex();
 
-  constructor(private configService: ConfigService) { }
+  constructor(private configService: ConfigService) {}
 
   private async getSheetsClient(): Promise<sheets_v4.Sheets> {
     const auth = new google.auth.JWT({
@@ -49,7 +49,7 @@ export class GoogleSheetsService {
   private async getNextBlockStartRow(sheets: sheets_v4.Sheets): Promise<number> {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
-      range: `${this.outputSheetName}!A:F`,
+      range: `${this.outputSheetName}!A:G`,
     });
 
     const values = response.data.values ?? [];
@@ -109,6 +109,7 @@ export class GoogleSheetsService {
       id: string;
       firstName: string;
       lastName: string;
+      pluga: string;
       role: string;
     }>
   > {
@@ -131,6 +132,7 @@ export class GoogleSheetsService {
       id: String(row[0] ?? '').trim().replace('.0', '').replace(/\s/g, ''),
       firstName: this.fixHebrew(row[1] ?? ''),
       lastName: this.fixHebrew(row[2] ?? ''),
+      pluga: this.fixHebrew(row[3] ?? ''),
       role: this.fixHebrew(row[6] ?? ''),
     }));
   }
@@ -141,6 +143,7 @@ export class GoogleSheetsService {
       firstName: string | null;
       lastName: string | null;
       role: string | null;
+      matchType: string | null;
       notes: string | null;
     }>,
   ): Promise<void> {
@@ -149,8 +152,6 @@ export class GoogleSheetsService {
     }
 
     await this.writeMutex.runExclusive(async () => {
-      console.log('WRITE LOCK ACQUIRED');
-
       const sheets = await this.getSheetsClient();
       const sheetId = await this.getSheetId(sheets);
 
@@ -165,21 +166,19 @@ export class GoogleSheetsService {
 
       const yellowHeaderText = this.getIsraelDateTimeText();
 
-      // 1. כותרות הבלוק
       await sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.outputSheetName}!A${yellowRow}:F${tableHeaderRow}`,
+        range: `${this.outputSheetName}!A${yellowRow}:G${tableHeaderRow}`,
         valueInputOption: 'RAW',
         requestBody: {
           values: [
-            [yellowHeaderText, '', '', '', '', ''],
-            ['רכב -', '', '', 'צ -', '', ''],
-            ['מס"ד', 'מ.א', 'שם פרטי', 'שם משפחה', 'תפקיד', 'הערות'],
+            [yellowHeaderText, '', '', '', '', '', ''],
+            ['רכב -', '', '', 'צ -', '', '', ''],
+            ['מס"ד', 'מ.א', 'שם פרטי', 'שם משפחה', 'תפקיד', 'הערות', 'סוג התאמה'],
           ],
         },
       });
 
-      // 2.  הטבלה שורות הנתונים + שורת הערות לנהג בסוף 
       const values = [
         ...rows.map((row, index) => [
           index + 1,
@@ -188,252 +187,289 @@ export class GoogleSheetsService {
           row.lastName ?? '',
           row.role ?? '',
           row.notes ?? '',
+          row.matchType ?? '',
         ]),
-        ['', '', '', '', '', 'נהג'],
+        ['', '', '', '', '', 'נהג', ''],
       ];
 
       await sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.outputSheetName}!A${dataStartRow}:F${dataEndRow}`,
+        range: `${this.outputSheetName}!A${dataStartRow}:G${dataEndRow}`,
         valueInputOption: 'RAW',
         requestBody: {
           values,
         },
       });
 
-      // 3. עיצוב
+      const requests: sheets_v4.Schema$Request[] = [
+        {
+          unmergeCells: {
+            range: {
+              sheetId,
+              startRowIndex: yellowRow - 1,
+              endRowIndex: groupHeaderRow,
+              startColumnIndex: 0,
+              endColumnIndex: 7,
+            },
+          },
+        },
+        {
+          mergeCells: {
+            range: {
+              sheetId,
+              startRowIndex: yellowRow - 1,
+              endRowIndex: yellowRow,
+              startColumnIndex: 0,
+              endColumnIndex: 6, // A:F
+            },
+            mergeType: 'MERGE_ALL',
+          },
+        },
+        {
+          mergeCells: {
+            range: {
+              sheetId,
+              startRowIndex: groupHeaderRow - 1,
+              endRowIndex: groupHeaderRow,
+              startColumnIndex: 0,
+              endColumnIndex: 3, // A:C
+            },
+            mergeType: 'MERGE_ALL',
+          },
+        },
+        {
+          mergeCells: {
+            range: {
+              sheetId,
+              startRowIndex: groupHeaderRow - 1,
+              endRowIndex: groupHeaderRow,
+              startColumnIndex: 3,
+              endColumnIndex: 6, // D:F
+            },
+            mergeType: 'MERGE_ALL',
+          },
+        },
+
+        // שורה צהובה
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: yellowRow - 1,
+              endRowIndex: yellowRow,
+              startColumnIndex: 0,
+              endColumnIndex: 6, // A:F
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: {
+                  red: 1,
+                  green: 1,
+                  blue: 0,
+                },
+                horizontalAlignment: 'CENTER',
+                textFormat: {
+                  bold: true,
+                  fontSize: 36,
+                  fontFamily: 'Arial',
+                  foregroundColor: { red: 0, green: 0, blue: 0 },
+                },
+              },
+            },
+            fields:
+              'userEnteredFormat.backgroundColor,userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
+          },
+        },
+
+        // שורת רכב/צ
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: groupHeaderRow - 1,
+              endRowIndex: groupHeaderRow,
+              startColumnIndex: 0,
+              endColumnIndex: 6, // A:F
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: {
+                  red: 0.85,
+                  green: 0.85,
+                  blue: 0.85,
+                },
+                horizontalAlignment: 'CENTER',
+                textFormat: {
+                  bold: true,
+                  fontSize: 20,
+                  fontFamily: 'Arial',
+                },
+              },
+            },
+            fields:
+              'userEnteredFormat.backgroundColor,userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
+          },
+        },
+
+        // שורת כותרות הטבלה
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: tableHeaderRow - 1,
+              endRowIndex: tableHeaderRow,
+              startColumnIndex: 0,
+              endColumnIndex: 7,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: {
+                  red: 1,
+                  green: 1,
+                  blue: 1,
+                },
+                horizontalAlignment: 'CENTER',
+                textFormat: {
+                  bold: true,
+                  fontSize: 22,
+                  fontFamily: 'Arial',
+                },
+              },
+            },
+            fields:
+              'userEnteredFormat.backgroundColor,userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
+          },
+        },
+
+        // שורות הנתונים + נהג
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: dataStartRow - 1,
+              endRowIndex: dataEndRow,
+              startColumnIndex: 0,
+              endColumnIndex: 7,
+            },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: 'CENTER',
+                textFormat: {
+                  fontSize: 20,
+                  fontFamily: 'Arial',
+                },
+              },
+            },
+            fields:
+              'userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
+          },
+        },
+
+        // גבולות
+        {
+          updateBorders: {
+            range: {
+              sheetId,
+              startRowIndex: yellowRow - 1,
+              endRowIndex: dataEndRow,
+              startColumnIndex: 0,
+              endColumnIndex: 7,
+            },
+            top: {
+              style: 'SOLID',
+              width: 1,
+              color: { red: 0, green: 0, blue: 0 },
+            },
+            bottom: {
+              style: 'SOLID',
+              width: 1,
+              color: { red: 0, green: 0, blue: 0 },
+            },
+            left: {
+              style: 'SOLID',
+              width: 1,
+              color: { red: 0, green: 0, blue: 0 },
+            },
+            right: {
+              style: 'SOLID',
+              width: 1,
+              color: { red: 0, green: 0, blue: 0 },
+            },
+            innerHorizontal: {
+              style: 'SOLID',
+              width: 1,
+              color: { red: 0, green: 0, blue: 0 },
+            },
+            innerVertical: {
+              style: 'SOLID',
+              width: 1,
+              color: { red: 0, green: 0, blue: 0 },
+            },
+          },
+        },
+
+        // רוחב עמודות
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId,
+              dimension: 'COLUMNS',
+              startIndex: 0,
+              endIndex: 7,
+            },
+            properties: {
+              pixelSize: 160,
+            },
+            fields: 'pixelSize',
+          },
+        },
+      ];
+
+      // צביעת סוג התאמה בלבד בעמודה G
+      rows.forEach((row, index) => {
+        const rowIndex = dataStartRow + index - 1;
+
+        let color: { red: number; green: number; blue: number } | null = null;
+
+        if (
+          row.matchType === 'התאמה חלקית' ||
+          row.matchType === 'כינוי' ||
+          row.matchType === 'לא חד משמעי'
+        ) {
+          color = { red: 1, green: 1, blue: 0 };
+        }
+
+        if (row.matchType === 'לא נמצא') {
+          color = { red: 1, green: 0.6, blue: 0.6 };
+        }
+
+        if (color) {
+          requests.push({
+            repeatCell: {
+              range: {
+                sheetId,
+                startRowIndex: rowIndex,
+                endRowIndex: rowIndex + 1,
+                startColumnIndex: 6,
+                endColumnIndex: 7,
+              },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: color,
+                },
+              },
+              fields: 'userEnteredFormat.backgroundColor',
+            },
+          });
+        }
+      });
+
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: this.spreadsheetId,
         requestBody: {
-          requests: [
-            {
-              unmergeCells: {
-                range: {
-                  sheetId,
-                  startRowIndex: yellowRow - 1,
-                  endRowIndex: groupHeaderRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-              },
-            },
-
-            {
-              mergeCells: {
-                range: {
-                  sheetId,
-                  startRowIndex: yellowRow - 1,
-                  endRowIndex: yellowRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-                mergeType: 'MERGE_ALL',
-              },
-            },
-
-            {
-              mergeCells: {
-                range: {
-                  sheetId,
-                  startRowIndex: groupHeaderRow - 1,
-                  endRowIndex: groupHeaderRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 3,
-                },
-                mergeType: 'MERGE_ALL',
-              },
-            },
-
-            {
-              mergeCells: {
-                range: {
-                  sheetId,
-                  startRowIndex: groupHeaderRow - 1,
-                  endRowIndex: groupHeaderRow,
-                  startColumnIndex: 3,
-                  endColumnIndex: 6,
-                },
-                mergeType: 'MERGE_ALL',
-              },
-            },
-
-            // שורה צהובה
-            {
-              repeatCell: {
-                range: {
-                  sheetId,
-                  startRowIndex: yellowRow - 1,
-                  endRowIndex: yellowRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: {
-                      red: 1,
-                      green: 1,
-                      blue: 0,
-                    },
-                    horizontalAlignment: 'CENTER',
-                    textFormat: {
-                      bold: true,
-                      fontSize: 36,
-                      fontFamily: 'Arial',
-                    },
-                  },
-                },
-                fields:
-                  'userEnteredFormat.backgroundColor,userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
-              },
-            },
-
-            // שורת רכב - / צ -
-            {
-              repeatCell: {
-                range: {
-                  sheetId,
-                  startRowIndex: groupHeaderRow - 1,
-                  endRowIndex: groupHeaderRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: {
-                      red: 0.85,
-                      green: 0.85,
-                      blue: 0.85,
-                    },
-                    horizontalAlignment: 'CENTER',
-                    textFormat: {
-                      bold: true,
-                      fontSize: 20,
-                      fontFamily: 'Arial',
-                    },
-                  },
-                },
-                fields:
-                  'userEnteredFormat.backgroundColor,userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
-              },
-            },
-
-            // שורת כותרות הטבלה
-            {
-              repeatCell: {
-                range: {
-                  sheetId,
-                  startRowIndex: tableHeaderRow - 1,
-                  endRowIndex: tableHeaderRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: {
-                      red: 1,
-                      green: 1,
-                      blue: 1,
-                    },
-                    horizontalAlignment: 'CENTER',
-                    textFormat: {
-                      bold: true,
-                      fontSize: 22,
-                      fontFamily: 'Arial',
-                    },
-                  },
-                },
-                fields:
-                  'userEnteredFormat.backgroundColor,userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
-              },
-            },
-
-            // שורות הנתונים + שורות הערות נהג
-            {
-              repeatCell: {
-                range: {
-                  sheetId,
-                  startRowIndex: dataStartRow - 1,
-                  endRowIndex: dataEndRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-                cell: {
-                  userEnteredFormat: {
-                    horizontalAlignment: 'CENTER',
-                    textFormat: {
-                      fontSize: 20,
-                      fontFamily: 'Arial',
-                    },
-                  },
-                },
-                fields:
-                  'userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
-              },
-            },
-
-            // גבולות
-            {
-              updateBorders: {
-                range: {
-                  sheetId,
-                  startRowIndex: yellowRow - 1,
-                  endRowIndex: dataEndRow,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-                top: {
-                  style: 'SOLID',
-                  width: 1,
-                  color: { red: 0, green: 0, blue: 0 },
-                },
-                bottom: {
-                  style: 'SOLID',
-                  width: 1,
-                  color: { red: 0, green: 0, blue: 0 },
-                },
-                left: {
-                  style: 'SOLID',
-                  width: 1,
-                  color: { red: 0, green: 0, blue: 0 },
-                },
-                right: {
-                  style: 'SOLID',
-                  width: 1,
-                  color: { red: 0, green: 0, blue: 0 },
-                },
-                innerHorizontal: {
-                  style: 'SOLID',
-                  width: 1,
-                  color: { red: 0, green: 0, blue: 0 },
-                },
-                innerVertical: {
-                  style: 'SOLID',
-                  width: 1,
-                  color: { red: 0, green: 0, blue: 0 },
-                },
-              },
-            },
-
-            // רוחב עמודות
-            {
-              updateDimensionProperties: {
-                range: {
-                  sheetId,
-                  dimension: 'COLUMNS',
-                  startIndex: 0,
-                  endIndex: 6,
-                },
-                properties: {
-                  pixelSize: 140,
-                },
-                fields: 'pixelSize',
-              },
-            },
-          ],
+          requests,
         },
       });
-
-      console.log('WRITE LOCK RELEASED');
     });
   }
 }

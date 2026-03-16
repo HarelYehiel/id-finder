@@ -15,6 +15,31 @@ class _HomePageState extends State<HomePage> {
 
   bool loading = false;
 
+  String selectedSearchMode = 'number';
+  String? selectedPluga;
+
+  final List<DropdownMenuItem<String>> searchModeItems = const [
+    DropdownMenuItem(
+      value: 'number',
+      child: Text('לפי מספר אישי'),
+    ),
+    DropdownMenuItem(
+      value: 'name',
+      child: Text('לפי שם'),
+    ),
+  ];
+
+  final List<String> plugot = [
+    'מפקדת היחידה',
+    "פלוגה מבצעית א'",
+    "פלוגה מבצעית ב'",
+    "פלוגה מבצעית ג'",
+    'פלוגה מסייעת',
+    'פלס"ם',
+  ];
+
+  bool get isNameMode => selectedSearchMode == 'name';
+
   @override
   void dispose() {
     textController.dispose();
@@ -22,22 +47,50 @@ class _HomePageState extends State<HomePage> {
   }
 
   void sendText() async {
+    if (textController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("יש להזין טקסט")),
+      );
+      return;
+    }
+
+    if (isNameMode && (selectedPluga == null || selectedPluga!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("יש לבחור פלוגה")),
+      );
+      return;
+    }
+
     setState(() {
       loading = true;
     });
 
-    final success = await ApiService.sendText(
-      widget.token,
-      textController.text,
-    );
+    try {
+      final success = await ApiService.sendText(
+        token: widget.token,
+        text: textController.text,
+        searchMode: selectedSearchMode,
+        pluga: isNameMode ? selectedPluga : null,
+      );
 
-    setState(() {
-      loading = false;
-    });
+      setState(() {
+        loading = false;
+      });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(success ? "Sent successfully" : "Failed")),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? "השליחה בוצעה בהצלחה" : "השליחה נכשלה"),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("אירעה שגיאה בשליחה")),
+      );
+    }
   }
 
   void clearText() {
@@ -52,12 +105,83 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            TextField(
-              controller: textController,
-              maxLines: 10,
+            DropdownButtonFormField<String>(
+              value: selectedSearchMode,
               decoration: const InputDecoration(
-                labelText: "Paste text here",
+                labelText: "בחר סוג חיפוש",
                 border: OutlineInputBorder(),
+              ),
+              items: searchModeItems,
+              onChanged: loading
+                  ? null
+                  : (value) {
+                      if (value == null) {
+                        return;
+                      }
+
+                      setState(() {
+                        selectedSearchMode = value;
+                        if (selectedSearchMode == 'number') {
+                          selectedPluga = null;
+                        }
+                      });
+                    },
+            ),
+            const SizedBox(height: 16),
+            if (isNameMode) ...[
+              DropdownButtonFormField<String>(
+                value: selectedPluga,
+                decoration: const InputDecoration(
+                  labelText: "בחר פלוגה",
+                  border: OutlineInputBorder(),
+                ),
+                items: plugot
+                    .map(
+                      (pluga) => DropdownMenuItem<String>(
+                        value: pluga,
+                        child: Text(pluga),
+                      ),
+                    )
+                    .toList(),
+                onChanged: loading
+                    ? null
+                    : (value) {
+                        setState(() {
+                          selectedPluga = value;
+                        });
+                      },
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  border: Border.all(color: Colors.amber.shade700),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'יש לרשום בכל שורה שם מלא בלבד, ללא מספר אישי, תפקיד או טקסט נוסף.\n'
+                  'לדוגמה:\n'
+                  'משה כהן\n'
+                  'כהן משה',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            Expanded(
+              child: TextField(
+                controller: textController,
+                maxLines: null,
+                expands: true,
+                textAlign: TextAlign.right,
+                decoration: InputDecoration(
+                  labelText: isNameMode ? "הדבק שמות כאן" : "הדבק טקסט כאן",
+                  alignLabelWithHint: true,
+                  border: const OutlineInputBorder(),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -66,7 +190,7 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: loading ? null : sendText,
-                    child: const Text("Send"),
+                    child: Text(loading ? "שולח..." : "שלח"),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -77,7 +201,7 @@ class _HomePageState extends State<HomePage> {
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text("Clear"),
+                    child: const Text("נקה"),
                   ),
                 ),
               ],

@@ -1,7 +1,13 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class ParseTextDto {
   @IsString()
-  @IsNotEmpty()
   text: string;
+
+  @IsIn(['number', 'name'])
+  searchMode: 'number' | 'name';
+
+  @IsOptional()
+  @IsString()
+  pluga?: string;
 }
