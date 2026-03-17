@@ -8,7 +8,7 @@ export class AppVersionMiddleware implements NestMiddleware {
 
     const appBuildHeader = req.header('x-app-build');
 
-    const minSupportedBuild = 1;
+    const minSupportedBuild = 2;
 
     const appBuild = Number(appBuildHeader);
 
