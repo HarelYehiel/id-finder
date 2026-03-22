@@ -13,6 +13,14 @@ type MatchType =
   | 'לא נמצא'
   | 'לא חד משמעי';
 
+type SourceRow = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  pluga: string;
+  role: string;
+};
+
 type ParsedLineResult = {
   originalLine: string;
   extractedNumber: string | null;
@@ -27,14 +35,6 @@ type ParsedLineResult = {
   } | null;
 };
 
-type SourceRow = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  pluga: string;
-  role: string;
-};
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -43,60 +43,62 @@ export class AuthService {
   ) {}
 
   private readonly aliasMap: Record<string, string[]> = {
-  אברהם: ['אבי', 'אברם'],
-  יעקב: ['קובי', 'יענקל'],
-  יוסף: ['יוסי'],
-  יצחק: ['איציק'],
-  שמואל: ['שמוליק'],
-  מרדכי: ['מוטי'],
-  דוד: ['דודי', 'דודו'],
-  משה: ['מושיקו', 'מושון'],
-  שלמה: ['שלומי', 'שלומקה'],
-  חיים: ['חיימי'],
-  מאיר: ['מירי'],
-  יהודה: ['אודי', 'יודי'],
-  אליהו: ['אלי'],
-  אלעזר: ['לייזר'],
-  ישראל: ['שרול', 'שרולי'],
-  אריה: ['אריק', 'לייב'],
-  בנימין: ['בני', 'בנצי'],
-  דניאל: ['דני'],
-  נתן: ['נתי'],
-  מתן: ['מתי'],
-  איתן: ['איתי'],
-  רפאל: ['רפי'],
-  גבריאל: ['גבי'],
-  מיכאל: ['מיכי'],
-  נועם: ['נומי'],
-  עומר: ['עומרי'],
-  אלון: ['אלוני'],
-  עמית: ['עמיתי'],
-  תומר: ['תומי'],
-  יאיר: ['יאירי'],
-  עידו: ['עידולי'],
-  רון: ['רוני'],
-  אור: ['אורי'],
-  עוז: ['עוזי'],
-  שי: ['שייקה'],
-  ברוך: ['בורי'],
-  צבי: ['צביקה'],
-  פנחס: ['פיני'],
-  אפרים: ['אפי'],
-  יוחנן: ['יוחי'],
-  זכריה: ['זכי'],
-  מנחם: ['מני'],
-  לוי: ['לייבי'],
+    אברהם: ['אבי', 'אברם'],
+    יעקב: ['קובי', 'יענקל'],
+    יוסף: ['יוסי'],
+    יצחק: ['איציק'],
+    שמואל: ['שמוליק'],
+    מרדכי: ['מוטי'],
+    דוד: ['דודי', 'דודו'],
+    משה: ['מושיקו', 'מושון'],
+    שלמה: ['שלומי', 'שלומקה'],
+    חיים: ['חיימי'],
+    מאיר: ['מירי'],
+    יהודה: ['אודי', 'יודי'],
+    אליהו: ['אלי'],
+    אלעזר: ['לייזר'],
+    ישראל: ['שרול', 'שרולי'],
+    אריה: ['אריק', 'לייב'],
+    בנימין: ['בני', 'בנצי'],
+    דניאל: ['דני'],
+    נתן: ['נתי'],
+    מתן: ['מתי'],
+    איתן: ['איתי'],
+    רפאל: ['רפי'],
+    גבריאל: ['גבי'],
+    מיכאל: ['מיכי'],
+    נועם: ['נומי'],
+    עומר: ['עומרי'],
+    אלון: ['אלוני'],
+    עמית: ['עמיתי'],
+    תומר: ['תומי'],
+    יאיר: ['יאירי'],
+    עידו: ['עידולי'],
+    רון: ['רוני'],
+    אור: ['אורי'],
+    עוז: ['עוזי'],
+    שי: ['שייקה'],
+    ברוך: ['בורי'],
+    צבי: ['צביקה'],
+    פנחס: ['פיני'],
+    אפרים: ['אפי'],
+    יוחנן: ['יוחי'],
+    זכריה: ['זכי'],
+    מנחם: ['מני'],
+    לוי: ['לייבי'],
+    שטיבר: ['שטאובר'],
+    דב: ['דובי', 'דוב'],
 
-  // תוספות חדשות (שמות משפחה עם גרש / וריאציות)
-  "ג'רמי": ['גרמי', 'ג׳רמי'],
-  "ג'ורנו": ['גורנו', 'ג׳ורנו'],
-  "גדז'": ['גדז', 'גדז׳'],
-  "פרג'ון": ['פרגון', 'פרג׳ון'],
-  "תורג'מן": ['תורגמן'],
-  "ג'ורדן": ['גורדן', 'ג׳ורדן'],
-  "ג'ייקובס": ['גיקובס', 'ג׳ייקובס', 'יעקובס'],
-  "סיגייצ'נקוב": ['סיגייצנקוב', 'סיגיצנקוב'],
-};
+    "ג'רמי": ['גרמי', 'ג׳רמי'],
+    "ג'ורנו": ['גורנו', 'ג׳ורנו'],
+    "גדז'": ['גדז', 'גדז׳'],
+    "פרג'ון": ['פרגון', 'פרג׳ון'],
+    "תורג'מן": ['תורגמן'],
+    "ג'ורדן": ['גורדן', 'ג׳ורדן'],
+    "ג'ייקובס": ['גיקובס', 'ג׳ייקובס', 'יעקובס'],
+    "סיגייצ'נקוב": ['סיגייצנקוב', 'סיגיצנקוב'],
+  };
+
   login(loginDto: LoginDto) {
     const user = USERS.find(
       (item) =>
@@ -126,7 +128,7 @@ export class AuthService {
   private normalizeText(value: string): string {
     return String(value ?? '')
       .trim()
-      .replace(/['״`´*]/g, '')
+      .replace(/['׳״"`´’‘]/g, '')
       .replace(/[^\u0590-\u05FFa-zA-Z0-9\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -145,30 +147,48 @@ export class AuthService {
     return this.normalizeText(`${row.lastName} ${row.firstName}`);
   }
 
-  private getBaseFirstName(firstName: string): string {
-    return this.normalizeText(firstName).split(' ')[0] ?? '';
+  private getWords(value: string): string[] {
+    return this.normalizeText(value).split(' ').filter(Boolean);
   }
 
-  private isAliasMatch(inputFirstName: string, candidateFirstName: string): boolean {
-    const normalizedInput = this.normalizeText(inputFirstName);
-    const candidateBaseName = this.getBaseFirstName(candidateFirstName);
-
-    const aliases = this.aliasMap[candidateBaseName] ?? [];
-    return aliases.some((alias) => this.normalizeText(alias) === normalizedInput);
+  private matchesWholeWordInName(fullName: string, input: string): boolean {
+    const words = this.getWords(fullName);
+    const normalizedInput = this.normalizeText(input);
+    return words.includes(normalizedInput);
   }
 
-  private splitInputToTwoSides(line: string): { left: string; right: string } | null {
-    const normalized = this.normalizeText(line);
-    const parts = normalized.split(' ').filter(Boolean);
+  private getAliasCandidates(value: string): string[] {
+    const normalized = this.normalizeText(value);
+    const words = this.getWords(value);
 
-    if (parts.length < 2) {
-      return null;
+    const candidates = new Set<string>();
+
+    if (normalized) candidates.add(normalized);
+    words.forEach((word) => candidates.add(word));
+
+    for (const [realName, aliases] of Object.entries(this.aliasMap)) {
+      const normalizedRealName = this.normalizeText(realName);
+      const normalizedAliases = aliases.map((alias) => this.normalizeText(alias));
+
+      if (
+        normalized === normalizedRealName ||
+        words.includes(normalizedRealName) ||
+        normalizedAliases.includes(normalized) ||
+        words.some((word) => normalizedAliases.includes(word))
+      ) {
+        candidates.add(normalizedRealName);
+        normalizedAliases.forEach((alias) => candidates.add(alias));
+      }
     }
 
-    return {
-      left: parts[0],
-      right: parts.slice(1).join(' '),
-    };
+    return Array.from(candidates);
+  }
+
+  private areNamePartsCompatible(inputPart: string, rowPart: string): boolean {
+    const inputCandidates = this.getAliasCandidates(inputPart);
+    const rowCandidates = this.getAliasCandidates(rowPart);
+
+    return inputCandidates.some((candidate) => rowCandidates.includes(candidate));
   }
 
   private findByNumber(excelRows: SourceRow[], extractedNumber: string): SourceRow | null {
@@ -193,7 +213,6 @@ export class AuthService {
     }
 
     const input = this.normalizeText(line);
-
     if (!input) {
       return {
         matched: false,
@@ -202,13 +221,21 @@ export class AuthService {
       };
     }
 
-    const normalizedPluga = this.normalizeText(pluga);
+    const parts = input.split(' ').filter(Boolean);
+    if (parts.length < 2) {
+      return {
+        matched: false,
+        matchType: 'לא נמצא',
+        result: null,
+      };
+    }
 
+    const normalizedPluga = this.normalizeText(pluga);
     const rowsInPluga = excelRows.filter(
       (row) => this.normalizeText(row.pluga) === normalizedPluga,
     );
 
-    // 1) התאמה מדויקת: "דניאל בן משה"
+    // 1) התאמה מדויקת מלאה
     const exactMatches = rowsInPluga.filter(
       (row) => this.getFullName(row) === input,
     );
@@ -229,7 +256,7 @@ export class AuthService {
       };
     }
 
-    // 2) התאמה מדויקת הפוכה: "בן משה דניאל"
+    // 2) התאמה מדויקת מלאה הפוכה
     const reversedExactMatches = rowsInPluga.filter(
       (row) => this.getReversedFullName(row) === input,
     );
@@ -250,131 +277,134 @@ export class AuthService {
       };
     }
 
-    const splitNormal = this.splitInputToTwoSides(input);
-    const parts = input.split(' ').filter(Boolean);
+    const splitNormal = {
+      left: parts[0],
+      right: parts.slice(1).join(' '),
+    };
 
-    // 3) התאמה חלקית חזקה:
-    // "מאיר נחשוני" -> "מאיר צב נחשוני"
-    if (splitNormal) {
-      const partialMatches = rowsInPluga.filter((row) => {
-        const rowLastName = this.normalizeText(row.lastName);
-        const rowBaseFirstName = this.getBaseFirstName(row.firstName);
+    const splitReversed = {
+      left: parts.slice(0, parts.length - 1).join(' '),
+      right: parts[parts.length - 1],
+    };
 
-        return (
-          rowLastName === splitNormal.right &&
-          rowBaseFirstName === this.normalizeText(splitNormal.left)
-        );
-      });
+    // 3) כינוי רגיל
+    const aliasMatches = rowsInPluga.filter((row) => {
+      const rowLastName = this.normalizeText(row.lastName);
 
-      if (partialMatches.length === 1) {
-        return {
-          matched: true,
-          matchType: 'התאמה חלקית',
-          result: partialMatches[0],
-        };
-      }
+      return (
+        rowLastName === this.normalizeText(splitNormal.right) &&
+        this.areNamePartsCompatible(splitNormal.left, row.firstName)
+      );
+    });
 
-      if (partialMatches.length > 1) {
-        return {
-          matched: false,
-          matchType: 'לא חד משמעי',
-          result: null,
-        };
-      }
-    }
-
-    // 4) התאמה חלקית חזקה בסדר הפוך:
-    // "נחשוני מאיר" -> "מאיר צב נחשוני"
-    if (parts.length >= 2) {
-      const splitReversedPartial = {
-        left: parts.slice(0, parts.length - 1).join(' '),
-        right: parts[parts.length - 1],
+    if (aliasMatches.length === 1) {
+      return {
+        matched: true,
+        matchType: 'כינוי',
+        result: aliasMatches[0],
       };
-
-      const reversedPartialMatches = rowsInPluga.filter((row) => {
-        const rowLastName = this.normalizeText(row.lastName);
-        const rowBaseFirstName = this.getBaseFirstName(row.firstName);
-
-        return (
-          rowLastName === splitReversedPartial.left &&
-          rowBaseFirstName === this.normalizeText(splitReversedPartial.right)
-        );
-      });
-
-      if (reversedPartialMatches.length === 1) {
-        return {
-          matched: true,
-          matchType: 'התאמה חלקית',
-          result: reversedPartialMatches[0],
-        };
-      }
-
-      if (reversedPartialMatches.length > 1) {
-        return {
-          matched: false,
-          matchType: 'לא חד משמעי',
-          result: null,
-        };
-      }
     }
 
-    // 5) התאמת כינוי: "יוסי לובין" -> "יוסף לובין"
-    if (splitNormal) {
-      const aliasMatches = rowsInPluga.filter((row) => {
-        const rowLastName = this.normalizeText(row.lastName);
-        return (
-          rowLastName === splitNormal.right &&
-          this.isAliasMatch(splitNormal.left, row.firstName)
-        );
-      });
-
-      if (aliasMatches.length === 1) {
-        return {
-          matched: true,
-          matchType: 'כינוי',
-          result: aliasMatches[0],
-        };
-      }
-
-      if (aliasMatches.length > 1) {
-        return {
-          matched: false,
-          matchType: 'לא חד משמעי',
-          result: null,
-        };
-      }
-    }
-
-    // 6) התאמת כינוי הפוכה: "לובין יוסי"
-    if (parts.length >= 2) {
-      const splitReversed = {
-        left: parts.slice(0, parts.length - 1).join(' '),
-        right: parts[parts.length - 1],
+    if (aliasMatches.length > 1) {
+      return {
+        matched: false,
+        matchType: 'לא חד משמעי',
+        result: null,
       };
+    }
 
-      const reversedAliasMatches = rowsInPluga.filter((row) => {
-        const rowLastName = this.normalizeText(row.lastName);
-        return (
-          rowLastName === splitReversed.left &&
-          this.isAliasMatch(splitReversed.right, row.firstName)
-        );
-      });
+    // 4) כינוי הפוך
+    const reversedAliasMatches = rowsInPluga.filter((row) => {
+      const rowLastName = this.normalizeText(row.lastName);
 
-      if (reversedAliasMatches.length === 1) {
-        return {
-          matched: true,
-          matchType: 'כינוי',
-          result: reversedAliasMatches[0],
-        };
-      }
+      return (
+        rowLastName === this.normalizeText(splitReversed.left) &&
+        this.areNamePartsCompatible(splitReversed.right, row.firstName)
+      );
+    });
 
-      if (reversedAliasMatches.length > 1) {
-        return {
-          matched: false,
-          matchType: 'לא חד משמעי',
-          result: null,
-        };
-      }
+    if (reversedAliasMatches.length === 1) {
+      return {
+        matched: true,
+        matchType: 'כינוי',
+        result: reversedAliasMatches[0],
+      };
+    }
+
+    if (reversedAliasMatches.length > 1) {
+      return {
+        matched: false,
+        matchType: 'לא חד משמעי',
+        result: null,
+      };
+    }
+
+    // 5) התאמה חלקית רגילה
+    const partialMatches = rowsInPluga.filter((row) => {
+      const rowFullFirstName = this.normalizeText(row.firstName);
+      const rowLastName = this.normalizeText(row.lastName);
+      const inputFirstName = this.normalizeText(splitNormal.left);
+      const inputLastName = this.normalizeText(splitNormal.right);
+
+      const firstNameMatches =
+        rowFullFirstName === inputFirstName ||
+        this.matchesWholeWordInName(rowFullFirstName, inputFirstName);
+
+      const lastNameMatches =
+        rowLastName === inputLastName ||
+        this.matchesWholeWordInName(rowLastName, inputLastName);
+
+      return firstNameMatches && lastNameMatches;
+    });
+
+    if (partialMatches.length === 1) {
+      return {
+        matched: true,
+        matchType: 'התאמה חלקית',
+        result: partialMatches[0],
+      };
+    }
+
+    if (partialMatches.length > 1) {
+      return {
+        matched: false,
+        matchType: 'לא חד משמעי',
+        result: null,
+      };
+    }
+
+    // 6) התאמה חלקית הפוכה
+    const reversedPartialMatches = rowsInPluga.filter((row) => {
+      const rowFullFirstName = this.normalizeText(row.firstName);
+      const rowLastName = this.normalizeText(row.lastName);
+      const inputLastName = this.normalizeText(splitReversed.left);
+      const inputFirstName = this.normalizeText(splitReversed.right);
+
+      const firstNameMatches =
+        rowFullFirstName === inputFirstName ||
+        this.matchesWholeWordInName(rowFullFirstName, inputFirstName);
+
+      const lastNameMatches =
+        rowLastName === inputLastName ||
+        this.matchesWholeWordInName(rowLastName, inputLastName);
+
+      return firstNameMatches && lastNameMatches;
+    });
+
+    if (reversedPartialMatches.length === 1) {
+      return {
+        matched: true,
+        matchType: 'התאמה חלקית',
+        result: reversedPartialMatches[0],
+      };
+    }
+
+    if (reversedPartialMatches.length > 1) {
+      return {
+        matched: false,
+        matchType: 'לא חד משמעי',
+        result: null,
+      };
     }
 
     return {

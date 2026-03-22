@@ -7,7 +7,7 @@ class ApiService {
   static const String prodUrl =
       "https://id-finder-backend-1027747272782.europe-west1.run.app";
 
-  static const String baseUrl = prodUrl;
+  static const String baseUrl = localUrl;
 
   static Future<String> _getBuildNumber() async {
     final packageInfo = await PackageInfo.fromPlatform();
