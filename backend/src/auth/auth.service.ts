@@ -4,6 +4,7 @@ import { USERS } from './data/users.data';
 import { LoginDto } from './dto/login.dto';
 import { ParseTextDto } from './dto/parse-text.dto';
 import { GoogleSheetsService } from './google-sheets.service';
+import levenshtein from 'fast-levenshtein';
 
 type MatchType =
   | 'מספר'
@@ -40,7 +41,7 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly googleSheetsService: GoogleSheetsService,
-  ) {}
+  ) { }
 
   private readonly aliasMap: Record<string, string[]> = {
     אברהם: ['אבי', 'אברם'],
@@ -132,6 +133,26 @@ export class AuthService {
       .replace(/[^\u0590-\u05FFa-zA-Z0-9\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private isFuzzyMatch(a: string, b: string): boolean {
+    if (!a || !b) return false;
+
+    a = this.normalizeText(a);
+    b = this.normalizeText(b);
+
+    // ❌ לא מילים קצרות
+    if (a.length < 4 || b.length < 4) return false;
+
+    // ❌ אות ראשונה חייבת להיות זהה
+    if (a[0] !== b[0]) return false;
+
+    // ❌ הפרש אורך קטן
+    if (Math.abs(a.length - b.length) > 1) return false;
+
+    const distance = levenshtein.get(a, b);
+
+    return distance <= 1;
   }
 
   private extractNumber(line: string): string | null {
@@ -407,6 +428,41 @@ export class AuthService {
       };
     }
 
+    // 7) 🔥 FUZZY MATCH (fallback אחרון)
+    const fuzzyMatches = rowsInPluga.filter((row) => {
+      const rowFirstName = this.normalizeText(row.firstName);
+      const rowLastName = this.normalizeText(row.lastName);
+
+      const inputFirst = this.normalizeText(parts[0]);
+      const inputLast = this.normalizeText(parts.slice(1).join(' '));
+
+      // שם פרטי חייב להיות מדויק / alias
+      const firstNameMatch =
+        rowFirstName === inputFirst ||
+        this.areNamePartsCompatible(inputFirst, rowFirstName);
+
+      if (!firstNameMatch) return false;
+
+      // שם משפחה עם fuzzy
+      return this.isFuzzyMatch(inputLast, rowLastName);
+    });
+
+    if (fuzzyMatches.length === 1) {
+      return {
+        matched: true,
+        matchType: 'התאמה חלקית', // או "fuzzy"
+        result: fuzzyMatches[0],
+      };
+    }
+
+    if (fuzzyMatches.length > 1) {
+      return {
+        matched: false,
+        matchType: 'לא חד משמעי',
+        result: null,
+      };
+    }
+
     return {
       matched: false,
       matchType: 'לא נמצא',
@@ -476,12 +532,12 @@ export class AuthService {
           matchType: nameSearch.matchType,
           result: nameSearch.result
             ? {
-                id: nameSearch.result.id,
-                firstName: nameSearch.result.firstName,
-                lastName: nameSearch.result.lastName,
-                role: nameSearch.result.role,
-                pluga: nameSearch.result.pluga,
-              }
+              id: nameSearch.result.id,
+              firstName: nameSearch.result.firstName,
+              lastName: nameSearch.result.lastName,
+              role: nameSearch.result.role,
+              pluga: nameSearch.result.pluga,
+            }
             : null,
         });
       }
