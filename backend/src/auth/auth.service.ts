@@ -147,7 +147,6 @@ export class AuthService {
         'https://api.openai.com/v1/responses',
         {
           model: 'gpt-5-mini',
-          temperature: 0,
           input: [
             {
               role: 'system',
