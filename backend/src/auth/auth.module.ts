@@ -8,7 +8,7 @@ import { GoogleSheetsService } from './google-sheets.service';
 
 @Module({
   imports: [
-    PassportModule,
+    PassportModule, 
     JwtModule.register({
       secret: 'very_secret_key',
       signOptions: { expiresIn: '1d' },

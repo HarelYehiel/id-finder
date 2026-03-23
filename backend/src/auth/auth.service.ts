@@ -1,10 +1,16 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { USERS } from './data/users.data';
 import { LoginDto } from './dto/login.dto';
 import { ParseTextDto } from './dto/parse-text.dto';
 import { GoogleSheetsService } from './google-sheets.service';
 import levenshtein from 'fast-levenshtein';
+import axios from 'axios';
 
 type MatchType =
   | 'מספר'
@@ -126,6 +132,118 @@ export class AuthService {
     };
   }
 
+  async extractNames(text: string): Promise<string[]> {
+    if (!text?.trim()) {
+      throw new BadRequestException('לא התקבל טקסט');
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new InternalServerErrorException('OPENAI_API_KEY לא מוגדר');
+    }
+
+    try {
+      const response = await axios.post(
+        'https://api.openai.com/v1/responses',
+        {
+          model: 'gpt-5-mini',
+          temperature: 0,
+          input: [
+            {
+              role: 'system',
+              content: [
+                {
+                  type: 'input_text',
+                  text:
+                    'החזר רק שמות מלאים של אנשים.\n' +
+                    'כל שורה = שם אחד בלבד.\n' +
+                    'בלי כותרות, בלי מספור, בלי הסברים.\n' +
+                    'אם שורה לא מכילה שם, אל תחזיר אותה.',
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'input_text',
+                  text,
+                },
+              ],
+            },
+          ],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        },
+      );
+
+      console.error(
+        'OpenAI raw response:',
+        JSON.stringify(response.data, null, 2),
+      );
+
+      let outputText = response.data?.output_text ?? '';
+
+      if (!outputText) {
+        const output = response.data?.output;
+
+        if (Array.isArray(output)) {
+          const texts: string[] = [];
+
+          for (const item of output) {
+            if (Array.isArray(item?.content)) {
+              for (const contentItem of item.content) {
+                if (
+                  contentItem?.type === 'output_text' &&
+                  typeof contentItem?.text === 'string'
+                ) {
+                  texts.push(contentItem.text);
+                }
+              }
+            }
+          }
+
+          outputText = texts.join('\n').trim();
+        }
+      }
+
+      console.error('OpenAI extracted text:', outputText);
+
+      return String(outputText)
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter(Boolean);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+
+      console.error('OpenAI extractNames status:', status);
+      console.error(
+        'OpenAI extractNames data:',
+        JSON.stringify(data, null, 2),
+      );
+
+      if (status === 401) {
+        throw new InternalServerErrorException('מפתח OpenAI לא תקין');
+      }
+
+      if (status === 429) {
+        throw new InternalServerErrorException(
+          `הגעת למגבלת שימוש או חיוב: ${JSON.stringify(data)}`,
+        );
+      }
+
+      throw new InternalServerErrorException(
+        `שגיאה בחילוץ שמות מול OpenAI: ${JSON.stringify(data)}`,
+      );
+    }
+  }
+
   private normalizeText(value: string): string {
     return String(value ?? '')
       .trim()
@@ -141,17 +259,11 @@ export class AuthService {
     a = this.normalizeText(a);
     b = this.normalizeText(b);
 
-    // ❌ לא מילים קצרות
     if (a.length < 4 || b.length < 4) return false;
-
-    // ❌ אות ראשונה חייבת להיות זהה
     if (a[0] !== b[0]) return false;
-
-    // ❌ הפרש אורך קטן
     if (Math.abs(a.length - b.length) > 1) return false;
 
     const distance = levenshtein.get(a, b);
-
     return distance <= 1;
   }
 
@@ -212,7 +324,10 @@ export class AuthService {
     return inputCandidates.some((candidate) => rowCandidates.includes(candidate));
   }
 
-  private findByNumber(excelRows: SourceRow[], extractedNumber: string): SourceRow | null {
+  private findByNumber(
+    excelRows: SourceRow[],
+    extractedNumber: string,
+  ): SourceRow | null {
     return excelRows.find((row) => String(row.id) === String(extractedNumber)) ?? null;
   }
 
@@ -256,7 +371,6 @@ export class AuthService {
       (row) => this.normalizeText(row.pluga) === normalizedPluga,
     );
 
-    // 1) התאמה מדויקת מלאה
     const exactMatches = rowsInPluga.filter(
       (row) => this.getFullName(row) === input,
     );
@@ -277,7 +391,6 @@ export class AuthService {
       };
     }
 
-    // 2) התאמה מדויקת מלאה הפוכה
     const reversedExactMatches = rowsInPluga.filter(
       (row) => this.getReversedFullName(row) === input,
     );
@@ -308,7 +421,6 @@ export class AuthService {
       right: parts[parts.length - 1],
     };
 
-    // 3) כינוי רגיל
     const aliasMatches = rowsInPluga.filter((row) => {
       const rowLastName = this.normalizeText(row.lastName);
 
@@ -334,7 +446,6 @@ export class AuthService {
       };
     }
 
-    // 4) כינוי הפוך
     const reversedAliasMatches = rowsInPluga.filter((row) => {
       const rowLastName = this.normalizeText(row.lastName);
 
@@ -360,7 +471,6 @@ export class AuthService {
       };
     }
 
-    // 5) התאמה חלקית רגילה
     const partialMatches = rowsInPluga.filter((row) => {
       const rowFullFirstName = this.normalizeText(row.firstName);
       const rowLastName = this.normalizeText(row.lastName);
@@ -394,7 +504,6 @@ export class AuthService {
       };
     }
 
-    // 6) התאמה חלקית הפוכה
     const reversedPartialMatches = rowsInPluga.filter((row) => {
       const rowFullFirstName = this.normalizeText(row.firstName);
       const rowLastName = this.normalizeText(row.lastName);
@@ -428,7 +537,6 @@ export class AuthService {
       };
     }
 
-    // 7) 🔥 FUZZY MATCH (fallback אחרון)
     const fuzzyMatches = rowsInPluga.filter((row) => {
       const rowFirstName = this.normalizeText(row.firstName);
       const rowLastName = this.normalizeText(row.lastName);
@@ -436,21 +544,19 @@ export class AuthService {
       const inputFirst = this.normalizeText(parts[0]);
       const inputLast = this.normalizeText(parts.slice(1).join(' '));
 
-      // שם פרטי חייב להיות מדויק / alias
       const firstNameMatch =
         rowFirstName === inputFirst ||
         this.areNamePartsCompatible(inputFirst, rowFirstName);
 
       if (!firstNameMatch) return false;
 
-      // שם משפחה עם fuzzy
       return this.isFuzzyMatch(inputLast, rowLastName);
     });
 
     if (fuzzyMatches.length === 1) {
       return {
         matched: true,
-        matchType: 'התאמה חלקית', // או "fuzzy"
+        matchType: 'התאמה חלקית',
         result: fuzzyMatches[0],
       };
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import 'package:flutter/services.dart';
 
 class HomePage extends StatefulWidget {
   final String token;
@@ -19,6 +20,8 @@ class _HomePageState extends State<HomePage> {
   String selectedSearchMode = 'number';
   String? selectedPluga;
 
+  List<String> extractedNames = [];
+
   static final Uri _sheetUri = Uri.parse(
     'https://docs.google.com/spreadsheets/d/1C0CXS6TSci-V19pCjRFbW5n5BYjJnS8YOTVRkr5Ym8Y/edit?gid=533784239#gid=533784239',
   );
@@ -26,6 +29,7 @@ class _HomePageState extends State<HomePage> {
   final List<DropdownMenuItem<String>> searchModeItems = const [
     DropdownMenuItem(value: 'number', child: Text('לפי מספר אישי')),
     DropdownMenuItem(value: 'name', child: Text('לפי שם')),
+    DropdownMenuItem(value: 'extract', child: Text('חילוץ שמות AI')),
   ];
 
   final List<String> plugot = [
@@ -38,6 +42,7 @@ class _HomePageState extends State<HomePage> {
   ];
 
   bool get isNameMode => selectedSearchMode == 'name';
+  bool get isExtractMode => selectedSearchMode == 'extract';
 
   @override
   void dispose() {
@@ -76,9 +81,33 @@ class _HomePageState extends State<HomePage> {
 
     setState(() {
       loading = true;
+      extractedNames = [];
     });
 
     try {
+      if (isExtractMode) {
+        final names = await ApiService.extractNames(
+          token: widget.token,
+          text: textController.text,
+        );
+
+        if (!mounted) return;
+
+        setState(() {
+          loading = false;
+          extractedNames = names;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              names.isEmpty ? "לא נמצאו שמות" : "נמצאו ${names.length} שמות",
+            ),
+          ),
+        );
+        return;
+      }
+
       final success = await ApiService.sendText(
         token: widget.token,
         text: textController.text,
@@ -106,12 +135,25 @@ class _HomePageState extends State<HomePage> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("אירעה שגיאה בשליחה")));
+      ).showSnackBar(SnackBar(content: Text("אירעה שגיאה: $e")));
     }
   }
 
+  void copyNames() {
+    final text = extractedNames.join('\n');
+
+    Clipboard.setData(ClipboardData(text: text));
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("הועתק ללוח")));
+  }
+
   void clearText() {
-    textController.clear();
+    setState(() {
+      textController.clear();
+      extractedNames = [];
+    });
   }
 
   @override
@@ -151,7 +193,7 @@ class _HomePageState extends State<HomePage> {
               DropdownButtonFormField<String>(
                 value: selectedSearchMode,
                 decoration: const InputDecoration(
-                  labelText: "בחר סוג חיפוש",
+                  labelText: "בחר סוג פעולה",
                   border: OutlineInputBorder(),
                 ),
                 items: searchModeItems,
@@ -163,7 +205,8 @@ class _HomePageState extends State<HomePage> {
 
                           setState(() {
                             selectedSearchMode = value;
-                            if (selectedSearchMode == 'number') {
+                            extractedNames = [];
+                            if (selectedSearchMode != 'name') {
                               selectedPluga = null;
                             }
                           });
@@ -215,13 +258,36 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 16),
               ],
+              if (isExtractMode) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.lightBlue.shade50,
+                    border: Border.all(color: Colors.lightBlue.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'במצב זה המערכת שולחת את הטקסט ל-AI ומחזירה רק שמות אנשים.\n'
+                    'אפשר להדביק טקסט חופשי עם מספרים, תפקידים, כותרות ושורות מיותרות.',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               TextField(
                 controller: textController,
                 minLines: 12,
                 maxLines: 18,
                 textAlign: TextAlign.right,
                 decoration: InputDecoration(
-                  labelText: isNameMode ? "הדבק שמות כאן" : "הדבק טקסט כאן",
+                  labelText:
+                      isExtractMode
+                          ? "הדבק טקסט לחילוץ שמות"
+                          : isNameMode
+                          ? "הדבק שמות כאן"
+                          : "הדבק טקסט כאן",
                   alignLabelWithHint: true,
                   border: const OutlineInputBorder(),
                 ),
@@ -232,7 +298,13 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: loading ? null : sendText,
-                      child: Text(loading ? "שולח..." : "שלח"),
+                      child: Text(
+                        loading
+                            ? "שולח..."
+                            : isExtractMode
+                            ? "חלץ שמות"
+                            : "שלח",
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -248,6 +320,54 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: copyNames,
+                      icon: const Icon(Icons.copy),
+                      label: const Text("העתק שמות"),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (isExtractMode && extractedNames.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'שמות שחולצו:',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey.shade50,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children:
+                        extractedNames
+                            .map(
+                              (name) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Text(
+                                  name,
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

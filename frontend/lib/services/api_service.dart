@@ -7,7 +7,7 @@ class ApiService {
   static const String prodUrl =
       "https://id-finder-backend-1027747272782.europe-west1.run.app";
 
-  static const String baseUrl = localUrl;
+  static const String baseUrl = prodUrl;
 
   static Future<String> _getBuildNumber() async {
     final packageInfo = await PackageInfo.fromPlatform();
@@ -83,6 +83,44 @@ class ApiService {
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       print("sendText error: $e");
+      rethrow;
+    }
+  }
+
+  static Future<List<String>> extractNames({
+    required String token,
+    required String text,
+  }) async {
+    try {
+      final buildNumber = await _getBuildNumber();
+
+      final response = await http
+          .post(
+            Uri.parse("$baseUrl/auth/extract-names"),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $token",
+              "X-App-Build": buildNumber,
+            },
+            body: jsonEncode({"text": text}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print("extractNames status: ${response.statusCode}");
+      print("extractNames body: ${response.body}");
+
+      if (response.statusCode == 426) {
+        throw Exception("APP_UPDATE_REQUIRED");
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((e) => e.toString()).toList();
+      }
+
+      throw Exception("Failed to extract names: ${response.body}");
+    } catch (e) {
+      print("extractNames error: $e");
       rethrow;
     }
   }

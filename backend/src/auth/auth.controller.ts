@@ -2,12 +2,15 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ParseTextDto } from './dto/parse-text.dto';
+import { ExtractNamesDto } from './dto/extract-names.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -17,6 +20,16 @@ export class AuthController {
   @Post('login')
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('extract-names')
+  extractNames(@Body() body: ExtractNamesDto, @Req() req: any) {
+    if (req.user?.code !== '1' || req.user?.identityNumber !== '5') {
+      throw new ForbiddenException('אין גישה לאופציה הזאת');
+    }
+
+    return this.authService.extractNames(body.text);
   }
 
   @UseGuards(JwtAuthGuard)
